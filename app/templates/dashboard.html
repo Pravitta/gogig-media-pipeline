@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Media Quality Pipeline Dashboard</title>
+    <!-- Google Fonts for Premium Typography -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        heading: ['Plus Jakarta Sans', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace']
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc; /* Slate-50 */
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.03) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.03) 0px, transparent 50%);
+            background-attachment: fixed;
+        }
+        
+        h1, h2, h3, th {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+
+        .badge-clean { 
+            background-color: #ecfdf5; 
+            color: #065f46; 
+            border: 1px solid #a7f3d0;
+        }
+        .badge-needs_review { 
+            background-color: #fffbeb; 
+            color: #92400e; 
+            border: 1px solid #fde68a;
+        }
+        .badge-rejected { 
+            background-color: #fff1f2; 
+            color: #9f1239; 
+            border: 1px solid #fecdd3;
+        }
+        .badge-pending { 
+            background-color: #f8fafc; 
+            color: #475569; 
+            border: 1px solid #e2e8f0;
+        }
+        .badge-processing { 
+            background-color: #f0f9ff; 
+            color: #075985; 
+            border: 1px solid #bae6fd;
+        }
+
+        /* HSRP Indian License Plate styling */
+        .hsrp-mini-plate {
+            border: 1.5px solid #0f172a;
+            color: #0f172a;
+            position: relative;
+            padding-left: 22px;
+            padding-right: 8px;
+            height: 28px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 5px;
+            font-weight: 700;
+            font-size: 13.5px;
+            letter-spacing: 0.05em;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+            text-transform: uppercase;
+        }
+
+        .hsrp-mini-plate.commercial {
+            background-color: #fef08a; /* Soft bright yellow */
+        }
+
+        .hsrp-mini-plate.private {
+            background-color: #ffffff;
+        }
+
+        .hsrp-mini-blue {
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 13px;
+            background: #1d4ed8;
+            border-top-left-radius: 2px;
+            border-bottom-left-radius: 2px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 4px;
+            font-weight: 900;
+            line-height: 1;
+            padding: 1px 0;
+        }
+
+        .hsrp-mini-hologram {
+            width: 4px;
+            height: 4px;
+            background: #cbd5e1;
+            border-radius: 50%;
+            margin-bottom: 1px;
+            opacity: 0.9;
+        }
+    </style>
+</head>
+<body class="min-h-screen p-6 md:p-12">
+    <div class="max-w-7xl mx-auto">
+        <!-- Header Section -->
+        <header class="flex items-center justify-between mb-8 pb-6 border-b border-slate-200/80">
+            <div>
+                <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">
+                    Media Quality Pipeline
+                </h1>
+                <p class="text-slate-500 text-sm mt-1 font-medium">Verification results and metadata checks</p>
+            </div>
+            
+            <form action="/api/v1/reset" method="post">
+                <button type="submit" class="bg-rose-50 hover:bg-rose-100/80 text-rose-600 border border-rose-200/80 font-semibold px-4 py-2 rounded-xl shadow-sm text-sm transition-all duration-200 flex items-center gap-2 hover:scale-[1.02] active:scale-[0.98]">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                    Clear Dashboard
+                </button>
+            </form>
+        </header>
+        
+        <!-- Job Cards Container -->
+        <div class="space-y-8">
+            {% for job in jobs %}
+            <div class="bg-white rounded-2xl border border-slate-200/80 shadow-[0_8px_30px_rgb(0,0,0,0.015)] p-6 flex flex-col lg:flex-row gap-8 hover:border-slate-300 transition-all duration-200">
+                
+                <!-- Left Column: Large Image & Job Metadata Details -->
+                <div class="w-full lg:w-72 flex flex-col gap-4 flex-shrink-0">
+                    <!-- Larger Image display -->
+                    <div class="relative group overflow-hidden rounded-xl border border-slate-100 shadow-sm bg-slate-50 aspect-square w-full">
+                        {% if job.upload %}
+                        <img src="/static/{{ job.upload.id }}_{{ job.upload.filename }}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 cursor-zoom-in" alt="Upload Image">
+                        {% else %}
+                        <div class="w-full h-full flex items-center justify-center text-sm text-slate-400 font-semibold">No Image Uploaded</div>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Structured Job Metadata Card -->
+                    <div class="bg-slate-50/60 border border-slate-100 rounded-xl p-4 flex flex-col gap-3">
+                        <div class="flex flex-col gap-1">
+                            <span class="text-[11.5px] font-bold text-slate-400 uppercase tracking-wider font-heading">Job ID</span>
+                            <span class="text-[13.5px] font-mono font-semibold text-slate-600 break-all select-all">{{ job.id }}</span>
+                        </div>
+                        
+                        <div class="grid grid-cols-2 gap-2 border-t border-slate-100 pt-2.5">
+                            <div class="flex flex-col gap-0.5">
+                                <span class="text-[11.5px] font-bold text-slate-400 uppercase tracking-wider font-heading">Status</span>
+                                <span class="px-2 py-0.5 text-center text-xs font-bold rounded-md badge-{{ job.status }} block">
+                                    {{ job.status }}
+                                </span>
+                            </div>
+                            <div class="flex flex-col gap-0.5">
+                                <span class="text-[11.5px] font-bold text-slate-400 uppercase tracking-wider font-heading">Verdict</span>
+                                {% if job.result and job.result.verdict %}
+                                <span class="px-2 py-0.5 text-center text-xs font-bold rounded-md badge-{{ job.result.verdict }} block">
+                                    {{ job.result.verdict }}
+                                </span>
+                                {% else %}
+                                <span class="text-slate-400 text-xs font-semibold text-center mt-1 block">-</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <div class="border-t border-slate-100 pt-3">
+                            <div class="flex items-start justify-between gap-2">
+                                <span class="text-[11.5px] font-bold text-slate-400 uppercase tracking-wider font-heading mt-1">Confidence Score</span>
+                                {% if job.result and job.result.score is defined and job.result.score is not none %}
+                                <div class="flex flex-col items-end">
+                                    <span class="text-3xl font-extrabold text-slate-800 leading-none">{{ (job.result.score * 100) | round(1) }}%</span>
+                                    <span class="text-[10px] text-slate-400 font-medium mt-2.5 leading-relaxed text-right max-w-[160px] whitespace-normal">
+                                        Weighted average of:
+                                        <br>• Duplicate (25%) • OCR Plate (20%)
+                                        <br>• Screenshot (15%) • Editing (15%)
+                                        <br>• Blur (15%) • Brightness (5%)
+                                        <br>• Dimensions (5%)
+                                    </span>
+                                </div>
+                                {% else %}
+                                <span class="text-slate-400 text-xs font-semibold">-</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Right Column: Verification Checks DAG Grid -->
+                <div class="flex-grow flex flex-col">
+                    <h3 class="text-[12.5px] font-bold uppercase tracking-widest text-slate-400 mb-4 font-heading border-b border-slate-100 pb-2">
+                        DAG Quality Assurance Checks
+                    </h3>
+                    
+                    {% if job.result and job.result.checks %}
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {% for check in job.result.checks %}
+                            <div class="bg-slate-50/50 border border-slate-100/80 rounded-xl p-4 flex flex-col justify-between hover:bg-slate-50 hover:border-slate-200/80 transition-all duration-150">
+                                <!-- Header row of the check box -->
+                                <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+                                    <span class="text-[13px] font-bold uppercase tracking-wider text-slate-400 font-heading">
+                                        {% if check.name == 'ocr_plate' %}
+                                            License Plate
+                                        {% elif check.name == 'vehicle' %}
+                                            Vehicle Classification
+                                        {% elif check.name == 'dimensions' %}
+                                            Dimensions & Resolution
+                                        {% elif check.name == 'blur' %}
+                                            blur
+                                        {% elif check.name == 'brightness' %}
+                                            Brightness
+                                        {% elif check.name == 'duplicate' %}
+                                            Duplication Check
+                                        {% elif check.name == 'screenshot' %}
+                                            screenshot/source integrity
+                                        {% elif check.name == 'editing' %}
+                                            Editing/Tampering
+                                        {% else %}
+                                            {{ check.name }}
+                                        {% endif %}
+                                    </span>
+                                    
+                                    <!-- Verdict badge of the check box -->
+                                    {% if check.verdict == 'clean' %}
+                                        {% if check.name == 'ocr_plate' %}
+                                            <span class="bg-emerald-50 text-emerald-700 text-[11.5px] font-bold px-2.5 py-0.5 rounded border border-emerald-200">✓ Valid Format ({{ check.plate_format }})</span>
+                                        {% elif check.name == 'vehicle' %}
+                                            <span class="bg-emerald-50 text-emerald-700 text-[11.5px] font-bold px-2.5 py-0.5 rounded border border-emerald-200">✓ Vehicle Confirmed</span>
+                                        {% elif check.name == 'dimensions' %}
+                                            <span class="bg-emerald-50 text-emerald-700 text-[11.5px] font-bold px-2.5 py-0.5 rounded border border-emerald-200">✓ Standard Resolution</span>
+                                        {% elif check.name == 'blur' %}
+                                            <span class="bg-emerald-50 text-emerald-700 text-[11.5px] font-bold px-2.5 py-0.5 rounded border border-emerald-200">✓ High Clarity (Sharp)</span>
+                                        {% elif check.name == 'brightness' %}
+                                            <span class="bg-emerald-50 text-emerald-700 text-[11.5px] font-bold px-2.5 py-0.5 rounded border border-emerald-200">✓ Balanced Lighting</span>
+                                        {% elif check.name == 'duplicate' %}
+                                            <span class="bg-emerald-50 text-emerald-700 text-[11.5px] font-bold px-2.5 py-0.5 rounded border border-emerald-200">✓ Original Upload</span>
+                                        {% elif check.name == 'screenshot' %}
+                                            <span class="bg-emerald-50 text-emerald-700 text-[11.5px] font-bold px-2.5 py-0.5 rounded border border-emerald-200">✓ Natural Camera Capture</span>
+                                        {% elif check.name == 'editing' %}
+                                            <span class="bg-emerald-50 text-emerald-700 text-[11.5px] font-bold px-2.5 py-0.5 rounded border border-emerald-200">✓ Unedited Original</span>
+                                        {% else %}
+                                            <span class="bg-emerald-50 text-emerald-700 text-[11.5px] font-bold px-2.5 py-0.5 rounded border border-emerald-200">✓ Clean</span>
+                                        {% endif %}
+                                    {% elif check.verdict == 'needs_review' %}
+                                        {% if check.name == 'blur' %}
+                                            <span class="bg-amber-50 text-amber-700 text-[11.5px] font-bold px-2.5 py-0.5 rounded border border-amber-200">⚠ Soft / Mildly Blurry</span>
+                                        {% elif check.name == 'brightness' %}
+                                            <span class="bg-amber-50 text-amber-700 text-[11.5px] font-bold px-2.5 py-0.5 rounded border border-amber-200">⚠ Low Light / Dim</span>
+                                        {% elif check.name == 'screenshot' %}
+                                            <span class="bg-amber-50 text-amber-700 text-[11.5px] font-bold px-2.5 py-0.5 rounded border border-amber-200">⚠ Digital Screenshot / Missing EXIF</span>
+                                        {% elif check.name == 'editing' %}
+                                            <span class="bg-amber-50 text-amber-700 text-[11.5px] font-bold px-2.5 py-0.5 rounded border border-amber-200">⚠ Tampered / Software Edited</span>
+                                        {% elif check.name == 'dimensions' %}
+                                            <span class="bg-amber-50 text-amber-700 text-[11.5px] font-bold px-2.5 py-0.5 rounded border border-amber-200">⚠ Low Resolution</span>
+                                        {% elif check.name == 'vehicle' %}
+                                            <span class="bg-amber-50 text-amber-700 text-[11.5px] font-bold px-2.5 py-0.5 rounded border border-amber-200">⚠ Non-Vehicle Image</span>
+                                        {% else %}
+                                            <span class="bg-amber-50 text-amber-700 text-[11.5px] font-bold px-2.5 py-0.5 rounded border border-amber-200">⚠ Needs Review</span>
+                                        {% endif %}
+                                    {% else %}
+                                        {% if check.name == 'ocr_plate' %}
+                                            <span class="bg-rose-50 text-rose-700 text-[11.5px] font-bold px-2.5 py-0.5 rounded border border-rose-200">✗ Unrecognized / Invalid Format</span>
+                                        {% elif check.name == 'vehicle' %}
+                                            <span class="bg-rose-50 text-rose-700 text-[11.5px] font-bold px-2.5 py-0.5 rounded border border-rose-200">✗ Non-Vehicle Image</span>
+                                        {% elif check.name == 'dimensions' %}
+                                            <span class="bg-rose-50 text-rose-700 text-[11.5px] font-bold px-2.5 py-0.5 rounded border border-rose-200">✗ Low Resolution</span>
+                                        {% elif check.name == 'blur' %}
+                                            <span class="bg-rose-50 text-rose-700 text-[11.5px] font-bold px-2.5 py-0.5 rounded border border-rose-200">✗ Low Detail / Blurry</span>
+                                        {% elif check.name == 'duplicate' %}
+                                            <span class="bg-rose-50 text-rose-700 text-[11.5px] font-bold px-2.5 py-0.5 rounded border border-rose-200">✗ Duplicate Match</span>
+                                        {% elif check.name == 'screenshot' %}
+                                            {% if 'fft_moire_pattern' in check.signal %}
+                                                <span class="bg-rose-50 text-rose-700 text-[11.5px] font-bold px-2.5 py-0.5 rounded border border-rose-200">✗ Photo of Screen (Moiré Grid)</span>
+                                            {% else %}
+                                                <span class="bg-rose-50 text-rose-700 text-[11.5px] font-bold px-2.5 py-0.5 rounded border border-rose-200">✗ Digital Screenshot</span>
+                                            {% endif %}
+                                        {% else %}
+                                            <span class="bg-rose-50 text-rose-700 text-[11.5px] font-bold px-2.5 py-0.5 rounded border border-rose-200">✗ Rejected</span>
+                                        {% endif %}
+                                    {% endif %}
+                                </div>
+                                
+                                <!-- Value representation of the check box -->
+                                <div class="flex flex-col mt-1">
+                                    {% if check.name == 'ocr_plate' %}
+                                        {% if check.plate_text and check.plate_text != 'None' %}
+                                            {% set is_commercial = 'TN' in check.plate_text or 'MH' in check.plate_text or 'yellow' in check.localization_method %}
+                                            <div class="mt-1">
+                                                <span class="hsrp-mini-plate font-mono {% if is_commercial %}commercial{% else %}private{% endif %}">
+                                                    <div class="hsrp-mini-blue">
+                                                        <div class="hsrp-mini-hologram"></div>
+                                                        <span>IND</span>
+                                                    </div>
+                                                    {{ check.plate_text }}
+                                                </span>
+                                            </div>
+                                        {% else %}
+                                            <span class="text-slate-600 font-semibold font-mono text-[13px] mt-1">None</span>
+                                        {% endif %}
+                                    {% elif check.name == 'vehicle' %}
+                                        <span class="text-[13.5px] font-semibold text-slate-700 mt-1">
+                                            {% if check.vehicle_detected %}
+                                                {{ check.vehicle_type }}
+                                            {% else %}
+                                                No Vehicle Detected
+                                            {% endif %}
+                                        </span>
+                                    {% elif check.name == 'dimensions' %}
+                                        <div class="flex flex-col gap-0.5 mt-1">
+                                            <span class="text-[13.5px] font-bold text-slate-700 font-mono">
+                                                {% if check.width is defined %}{{ check.width }} x {{ check.height }}{% else %}-{% endif %}
+                                            </span>
+                                            <span class="text-[11.5px] font-medium text-slate-500 font-mono">
+                                                {% if check.megapixels is defined %}{{ check.megapixels }} Megapixels{% else %}-{% endif %}
+                                            </span>
+                                        </div>
+                                    {% else %}
+                                        <!-- Complete signal math values shown fully (no truncate, break-all) -->
+                                        <span class="text-[13px] text-slate-600 font-mono break-all leading-relaxed mt-1" title="{{ check.signal }}">
+                                            {{ check.signal }}
+                                        </span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="flex-grow flex items-center justify-center text-slate-400 text-sm font-medium border border-dashed border-slate-200 rounded-2xl h-48 bg-slate-50/50">
+                            No verification details available yet
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% else %}
+            <!-- Empty state -->
+            <div class="bg-white rounded-2xl border border-slate-200/80 shadow-[0_8px_30px_rgb(0,0,0,0.015)] p-12 text-center">
+                <div class="max-w-md mx-auto flex flex-col items-center">
+                    <div class="h-16 w-16 bg-indigo-50 border border-indigo-100 rounded-2xl flex items-center justify-center text-indigo-500 mb-4">
+                        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                    </div>
+                    <h2 class="text-xl font-bold text-slate-900">No Job Logs Yet</h2>
+                    <p class="text-slate-500 text-sm mt-1">Upload vehicle photos via API endpoints to monitor pipeline signals live here.</p>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    
+    <script>
+        // Auto-refresh every 5 seconds to show async updates
+        setTimeout(() => {
+            window.location.reload();
+        }, 5000);
+    </script>
+</body>
+</html>

@@ -1,0 +1,81 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: gogig_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_DB: mediadb
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d mediadb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: gogig_redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: .
+    container_name: gogig_api
+    restart: always
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgrespassword@postgres:5432/mediadb
+      - REDIS_URL=redis://redis:6379/0
+      - UPLOAD_DIR=/app/uploads
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/google-credentials.json
+      - VISION_API_KEY=AIzaSyBA3_VgDyrUguJ4sP7vKTejC2q1xn3zwgI
+    volumes:
+      - .:/app
+      - uploads_data:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build: .
+    container_name: gogig_worker
+    restart: always
+    command: python -m worker.worker
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgrespassword@postgres:5432/mediadb
+      - REDIS_URL=redis://redis:6379/0
+      - UPLOAD_DIR=/app/uploads
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/google-credentials.json
+      - VISION_API_KEY=AIzaSyBA3_VgDyrUguJ4sP7vKTejC2q1xn3zwgI
+    volumes:
+      - .:/app
+      - uploads_data:/app/uploads
+      - easyocr_models:/root/.EasyOCR
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  redis_data:
+  uploads_data:
+  easyocr_models:
