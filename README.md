@@ -27,7 +27,7 @@ graph TD
     W6 --> W7
     
     W7 -->|5. Compute Composite Score & Verdict| DB
-    User -->|6. GET /dashboard or GET /api/v1/results/{id}| API
+    User -->|"6. GET /dashboard or GET /api/v1/results/{id}"| API
 ```
 
 ### Service Flow
