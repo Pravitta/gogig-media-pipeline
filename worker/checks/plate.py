@@ -391,6 +391,11 @@ def _run_cloud_vision_rest_ocr(image_path: str, api_key: str):
         lines = [line.strip() for line in full_text.split("\n") if line.strip()]
         
         found = _search_license_plate_in_lines(lines)
+        try:
+            with open("C:\\Users\\jprav\\gogig-media-pipeline\\debug_ocr_lines.log", "a", encoding="utf-8") as f:
+                f.write(f"Image: {image_path}\nLines: {lines}\nFound: {found}\n\n")
+        except Exception:
+            pass
         if found:
             return {
                 "plate_text":           found["plate_text"],
@@ -488,80 +493,7 @@ def analyze_plate(image_path: str):
         except Exception:
             pass
 
-    try:
-        pil = Image.open(image_path).convert('RGB')
-        bgr = cv2.cvtColor(np.array(pil), cv2.COLOR_RGB2BGR)
-    except Exception as e:
-        return fail(f"error_loading_image:{e}")
-
-    # Stage 1: Plate Localization
-    candidate_crops = _localize_plate_region(bgr)
-
-    if not candidate_crops:
-        return fail("plate_detected=false,localization=none")
-
-    best_valid = None
-    best_clean = ""
-    best_conf  = 0.0
-    best_method = "none"
-
-    # Stage 2 & 3: Preprocessing & OCR Execution across localized candidate crops
-    for crop, loc_method in candidate_crops:
-        try:
-            thresh, inv_thresh = _preprocess_for_ocr(crop)
-            for img_variant in [thresh, inv_thresh]:
-                clean_text, conf = _run_tesseract_ocr(img_variant)
-                if clean_text:
-                    valid_res = _normalize_and_validate(clean_text)
-                    if valid_res:
-                        best_valid = valid_res
-                        best_conf = conf
-                        best_method = loc_method
-                        break
-                    if not best_clean or abs(len(clean_text) - 9) < abs(len(best_clean) - 9):
-                        best_clean = clean_text
-                        best_conf = conf
-                        best_method = loc_method
-            if best_valid:
-                break
-        except pytesseract.pytesseract.TesseractNotFoundError:
-            return fail("Tesseract OCR engine is not installed on Windows host. Install via winget or run in Docker.")
-        except Exception:
-            continue
-
-    # Stage 4: Validate and Return
-    if best_valid:
-        return {
-            "name":                 "ocr_plate",
-            "score":                1.0,
-            "signal":               f"plate={best_valid['plate_text']},method={best_method}",
-            "verdict":              "clean",
-            "plate_text":           best_valid["plate_text"],
-            "normalized_text":      best_valid["normalized_text"],
-            "plate_format":         "INDIAN_STANDARD_VEHICLE",
-            "is_valid_format":      True,
-            "format_valid":         True,
-            "ocr_confidence":       round(best_conf, 2),
-            "localization_method":  best_method,
-            "plate_detected":       True,
-            "confidence":           round(best_conf, 2),
-        }
-
-    # If no region localizes AND no OCR output matches regex -> return plate_detected: False
-    return {
-        "name":                 "ocr_plate",
-        "score":                0.0,
-        "signal":               f"plate_detected=false,raw={best_clean or 'None'},method={best_method}",
-        "verdict":              "needs_review",
-        "plate_text":           "None",
-        "normalized_text":      "None",
-        "plate_format":         "UNKNOWN",
-        "is_valid_format":      False,
-        "format_valid":         False,
-        "ocr_confidence":       round(best_conf, 2),
-        "localization_method":  best_method,
-        "plate_detected":       False,
-        "confidence":           0.0,
-    }
+    # Tesseract fallback is disabled. If Google Cloud Vision was not configured or failed to detect a plate, return failure.
+    return fail("plate_detected=false,cloud_vision=none")
 
 

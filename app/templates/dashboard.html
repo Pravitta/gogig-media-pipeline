@@ -138,8 +138,36 @@
             </form>
         </header>
         
+        <!-- Upload Ingestion Section -->
+        <section class="bg-white rounded-2xl border border-slate-200/80 shadow-[0_8px_30px_rgb(0,0,0,0.015)] p-6 mb-8">
+            <h2 class="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2 font-heading">
+                <svg class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                Image Upload Ingestion
+            </h2>
+            
+            <div id="dropzone" class="border-2 border-dashed border-slate-200 hover:border-indigo-400 bg-slate-50/50 hover:bg-indigo-50/10 rounded-xl p-8 text-center cursor-pointer transition-all duration-200 group">
+                <input type="file" id="fileInput" class="hidden" accept="image/*" multiple>
+                <div class="flex flex-col items-center">
+                    <div class="h-12 w-12 bg-white border border-slate-100 rounded-xl flex items-center justify-center text-slate-400 group-hover:text-indigo-500 shadow-sm mb-3 group-hover:scale-110 transition-all duration-200">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                    </div>
+                    <p class="text-sm font-semibold text-slate-800">Drag & drop your vehicle image(s) here</p>
+                    <p class="text-xs text-slate-500 mt-1">Supports PNG, JPG, JPEG, WEBP (Single or Bulk upload)</p>
+                    <button type="button" class="mt-4 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs px-4 py-2 rounded-lg shadow-sm transition-all duration-150">Browse Files</button>
+                </div>
+            </div>
+            
+            <!-- Uploading Queue Container -->
+            <div id="uploadQueueContainer" class="hidden mt-6 border-t border-slate-100 pt-6">
+                <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 font-heading">Ingestion & Processing Queue</h3>
+                <div id="uploadQueue" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Dynamic queue items go here -->
+                </div>
+            </div>
+        </section>
+        
         <!-- Job Cards Container -->
-        <div class="space-y-8">
+        <div id="jobsList" class="space-y-8">
             {% for job in jobs %}
             <div class="bg-white rounded-2xl border border-slate-200/80 shadow-[0_8px_30px_rgb(0,0,0,0.015)] p-6 flex flex-col lg:flex-row gap-8 hover:border-slate-300 transition-all duration-200">
                 
@@ -363,10 +391,211 @@
     </div>
     
     <script>
-        // Auto-refresh every 5 seconds to show async updates
-        setTimeout(() => {
-            window.location.reload();
-        }, 5000);
+        const dropzone = document.getElementById('dropzone');
+        const fileInput = document.getElementById('fileInput');
+        const uploadQueue = document.getElementById('uploadQueue');
+        const uploadQueueContainer = document.getElementById('uploadQueueContainer');
+
+        // Click to open file dialog
+        dropzone.addEventListener('click', (e) => {
+            if (e.target !== fileInput) {
+                fileInput.click();
+            }
+        });
+
+        const browseBtn = dropzone.querySelector('button');
+        if (browseBtn) {
+            browseBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                fileInput.click();
+            });
+        }
+
+        // Drag and drop events
+        dropzone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropzone.classList.add('border-indigo-400', 'bg-indigo-50/20');
+        });
+
+        dropzone.addEventListener('dragleave', () => {
+            dropzone.classList.remove('border-indigo-400', 'bg-indigo-50/20');
+        });
+
+        dropzone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropzone.classList.remove('border-indigo-400', 'bg-indigo-50/20');
+            if (e.dataTransfer.files.length > 0) {
+                handleFilesUpload(e.dataTransfer.files);
+            }
+        });
+
+        fileInput.addEventListener('change', () => {
+            if (fileInput.files.length > 0) {
+                handleFilesUpload(fileInput.files);
+            }
+        });
+
+        async function handleFilesUpload(files) {
+            uploadQueueContainer.classList.remove('hidden');
+            
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                const itemId = 'upload-' + Math.random().toString(36).substr(2, 9);
+                
+                // Render a queue card
+                const cardHtml = `
+                    <div id="${itemId}" class="bg-slate-50 border border-slate-200/80 rounded-xl p-4 flex flex-col justify-between hover:bg-slate-100/50 transition-all duration-150">
+                        <div class="flex items-center justify-between gap-2 mb-2">
+                            <span class="text-xs font-bold text-slate-700 truncate max-w-[200px]" title="${file.name}">${file.name}</span>
+                            <span class="status-badge px-2 py-0.5 text-[11px] font-bold rounded bg-slate-100 text-slate-500 border border-slate-200">
+                                Uploading...
+                            </span>
+                        </div>
+                        <div class="w-full bg-slate-200 rounded-full h-1.5 mb-2 overflow-hidden">
+                            <div class="progress-bar bg-indigo-500 h-1.5 rounded-full transition-all duration-300" style="width: 10%"></div>
+                        </div>
+                        <div class="details-section text-[11.5px] text-slate-500 font-mono hidden mt-1"></div>
+                    </div>
+                `;
+                uploadQueue.insertAdjacentHTML('beforeend', cardHtml);
+                
+                // Start upload
+                uploadFileTask(file, itemId);
+            }
+        }
+
+        async function uploadFileTask(file, itemId) {
+            const card = document.getElementById(itemId);
+            const badge = card.querySelector('.status-badge');
+            const progressBar = card.querySelector('.progress-bar');
+            const details = card.querySelector('.details-section');
+            
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                const response = await fetch('/api/v1/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Upload failed with status ${response.status}`);
+                }
+                
+                const data = await response.json();
+                const procId = data.processing_id;
+                
+                badge.innerText = 'Processing...';
+                badge.className = 'status-badge px-2 py-0.5 text-[11px] font-bold rounded bg-sky-50 text-sky-700 border border-sky-200';
+                progressBar.style.width = '50%';
+                progressBar.classList.replace('bg-indigo-500', 'bg-sky-500');
+                
+                // Start polling results
+                pollJobResult(procId, itemId);
+                
+            } catch (err) {
+                badge.innerText = 'Upload Failed';
+                badge.className = 'status-badge px-2 py-0.5 text-[11px] font-bold rounded bg-rose-50 text-rose-700 border border-rose-200';
+                progressBar.style.width = '100%';
+                progressBar.classList.replace('bg-indigo-500', 'bg-rose-500');
+                details.classList.remove('hidden');
+                details.innerText = err.message;
+            }
+        }
+
+        async function pollJobResult(procId, itemId) {
+            const card = document.getElementById(itemId);
+            const badge = card.querySelector('.status-badge');
+            const progressBar = card.querySelector('.progress-bar');
+            const details = card.querySelector('.details-section');
+            
+            const interval = setInterval(async () => {
+                try {
+                    const response = await fetch(`/api/v1/results/${procId}`);
+                    if (!response.ok) return;
+                    
+                    const data = await response.json();
+                    if (data.status === 'completed') {
+                        clearInterval(interval);
+                        
+                        const result = data.result;
+                        const verdict = result.verdict;
+                        const score = Math.round(result.score * 100);
+                        
+                        badge.innerText = verdict.toUpperCase() + ` (${score}%)`;
+                        if (verdict === 'clean') {
+                            badge.className = 'status-badge px-2 py-0.5 text-[11px] font-bold rounded bg-emerald-50 text-emerald-700 border border-emerald-200';
+                            progressBar.classList.replace('bg-sky-500', 'bg-emerald-500');
+                        } else if (verdict === 'rejected') {
+                            badge.className = 'status-badge px-2 py-0.5 text-[11px] font-bold rounded bg-rose-50 text-rose-700 border border-rose-200';
+                            progressBar.classList.replace('bg-sky-500', 'bg-rose-500');
+                        } else {
+                            badge.className = 'status-badge px-2 py-0.5 text-[11px] font-bold rounded bg-amber-50 text-amber-700 border border-amber-200';
+                            progressBar.classList.replace('bg-sky-500', 'bg-amber-500');
+                        }
+                        
+                        progressBar.style.width = '100%';
+                        
+                        // Show brief signals (like plate text or vehicle type)
+                        let summarySignal = '';
+                        const plateCheck = result.checks.find(c => c.name === 'ocr_plate');
+                        const vehicleCheck = result.checks.find(c => c.name === 'vehicle');
+                        
+                        if (plateCheck && plateCheck.plate_text && plateCheck.plate_text !== 'None') {
+                            summarySignal += `Plate: ${plateCheck.plate_text} | `;
+                        }
+                        if (vehicleCheck && vehicleCheck.vehicle_detected) {
+                            summarySignal += `${vehicleCheck.vehicle_type}`;
+                        }
+                        if (!summarySignal) {
+                            summarySignal = `Verdict: ${verdict}`;
+                        }
+                        
+                        details.classList.remove('hidden');
+                        details.innerText = summarySignal;
+                        
+                        // Refresh main dashboard log
+                        refreshJobsDashboard();
+                        
+                    } else if (data.status === 'failed') {
+                        clearInterval(interval);
+                        badge.innerText = 'FAILED';
+                        badge.className = 'status-badge px-2 py-0.5 text-[11px] font-bold rounded bg-rose-50 text-rose-700 border border-rose-200';
+                        progressBar.style.width = '100%';
+                        progressBar.classList.replace('bg-sky-500', 'bg-rose-500');
+                        details.classList.remove('hidden');
+                        details.innerText = data.error_message || 'Pipeline processing failed';
+                        
+                        refreshJobsDashboard();
+                    }
+                } catch (err) {
+                    console.error("Error polling job", err);
+                }
+            }, 2000);
+        }
+
+        async function refreshJobsDashboard() {
+            try {
+                const response = await fetch('/dashboard');
+                if (response.ok) {
+                    const htmlText = await response.text();
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(htmlText, 'text/html');
+                    const newJobsList = doc.querySelector('#jobsList');
+                    const currentJobsList = document.querySelector('#jobsList');
+                    if (newJobsList && currentJobsList) {
+                        currentJobsList.innerHTML = newJobsList.innerHTML;
+                    }
+                }
+            } catch (err) {
+                console.error("Failed to refresh jobs dashboard", err);
+            }
+        }
+
+        // Auto-refresh jobs list every 5 seconds to show async updates smoothly
+        setInterval(refreshJobsDashboard, 5000);
     </script>
 </body>
 </html>
